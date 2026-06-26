@@ -1,8 +1,8 @@
 import Order from "../models/order.model.js";
 import Payment from "../models/payment.model.js";
 import Cart from "../models/cart.model.js";
-import axios from "axios"
-import crypto from "crypto"
+import axios from "axios";
+import crypto from "crypto";
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
@@ -18,7 +18,7 @@ export const initializePayment = async (req, res) => {
 
     const totalAmount = cart.items.reduce(
       (sum, item) => sum + item.price * item.quantity,
-      0
+      0,
     );
 
     const order = await Order.create({
@@ -45,7 +45,7 @@ export const initializePayment = async (req, res) => {
           Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
 
     const { reference, authorization_url } = paystackResponse.data.data;
@@ -63,158 +63,171 @@ export const initializePayment = async (req, res) => {
       authorization_url,
       orderId: order._id,
     });
-
   } catch (error) {
-    console.error("Error initializing payment:", error?.response?.data || error);
+    console.error(
+      "Error initializing payment:",
+      error?.response?.data || error,
+    );
     res.status(500).json({ message: "Error initializing payment" });
   }
 };
 
-export const verifyPayment = async(req, res) => {
-    try{
-        const { reference } = req.params
-        const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY
+export const verifyPayment = async (req, res) => {
+  try {
+    const { reference } = req.params;
+    const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
-        const paystackRes = await axios.get(`${PAYSTACK_BASE_URL}/transaction/verify/${reference}`, 
-            {
-                headers: {
-                    Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`
-                }
-            }
-        )
+    const paystackRes = await axios.get(
+      `${PAYSTACK_BASE_URL}/transaction/verify/${reference}`,
+      {
+        headers: {
+          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        },
+      },
+    );
 
-        const data = paystackRes.data.data
+    const data = paystackRes.data.data;
 
-        const payment = await Payment.findOne({ transactionRef: reference })
-        if(!payment){
-            return res.status(404).json({message: "Payment record not found"})
-        }
-
-        if(payment.status === 'successful'){
-            return res.status(400).json({message: "You have already made payment"})
-        }
-
-        if(data.status === 'success'){
-            payment.status = 'successful'
-            payment.paymentMethod = data.channel
-            payment.paidAt = data.paid_at
-
-            await payment.save()
-
-            const order = await Order.findOne({transactionRef: reference})
-            await Order.findByIdAndUpdate(payment.order, {orderStatus: 'confirmed'}, {new: true, useValidators: true})
-
-            return res.status(200).json({
-                message: "Payment verified successfully",
-                data: payment,
-            });
-        }else{
-            payment.status = "failed";
-            await payment.save();
- 
-            return res.status(400).json({ message: "Payment verification failed", data: payment });
-        }
-
-    }catch(error){
-        console.error("Error verifying payment:", error?.response?.data || error);
-        res.status(500).json({ message: "Error verifying payment" });
+    const payment = await Payment.findOne({ transactionRef: reference });
+    if (!payment) {
+      return res.status(404).json({ message: "Payment record not found" });
     }
-}
 
-export const getAllUserPayment = async(req, res) =>{
-    try{
-        const userId = req.user.id;
-        const payment = await Payment.find().populate('user', 'fullName email').populate('order').sort({createdAt: -1})
-
-        res.status(200).json({
-            message: "All payments fetched successfully",
-            data: payment,
-        });
-    }catch(error){
-        console.error("Error fetching all payments:", error);
-        res.status(500).json({ message: "Error fetching all payments" });
+    if (payment.status === "successful") {
+      return res.status(400).json({ message: "You have already made payment" });
     }
-}
 
-export const getUserPayments = async(req, res)=> {
-    try{
-        const userId = req.user.id
+    if (data.status === "success") {
+      payment.status = "successful";
+      payment.paymentMethod = data.channel;
+      payment.paidAt = data.paid_at;
 
-        const payment = await Payment.find({ user: userId }).populate('order').sort({createdAt: -1})
+      await payment.save();
 
-        res.status(200).json({
-            message: "Payments fetched successfully",
-            data: payment,
-        });
+      await Order.findByIdAndUpdate(
+        payment.order,
+        { orderStatus: "confirmed" },
+        { new: true, useValidators: true },
+      );
 
-    }catch(error){
-        console.error("Error fetching payments:", error);
-        res.status(500).json({ message: "Error fetching payments" });
+      return res.status(200).json({
+        message: "Payment verified successfully",
+        data: payment,
+      });
+    } else {
+      payment.status = "failed";
+      await payment.save();
+
+      return res
+        .status(400)
+        .json({ message: "Payment verification failed", data: payment });
     }
-}
+  } catch (error) {
+    console.error("Error verifying payment:", error?.response?.data || error);
+    res.status(500).json({ message: "Error verifying payment" });
+  }
+};
 
-export const getPaymentByReference = async(req, res) => {
-    try{
-        const { reference } = req.params
-        const userId = req.user.id;
+export const getAllUserPayment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const payment = await Payment.find()
+      .populate("user", "fullName email")
+      .populate("order")
+      .sort({ createdAt: -1 });
 
-        const payment = await Payment.findOne({ transactionRef: reference, user: userId })
+    res.status(200).json({
+      message: "All payments fetched successfully",
+      data: payment,
+    });
+  } catch (error) {
+    console.error("Error fetching all payments:", error);
+    res.status(500).json({ message: "Error fetching all payments" });
+  }
+};
 
-        
-        if (!payment) {
-            return res.status(404).json({ message: "Payment not found" });
-        }
- 
-        res.status(200).json({
-            message: "Payment fetched successfully",
-            data: payment,
-        });
-    }catch(error){
-        console.error("Error fetching payment:", error);
-        res.status(500).json({ message: "Error fetching payment" });
+export const getUserPayments = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const payment = await Payment.find({ user: userId })
+      .populate("order")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      message: "Payments fetched successfully",
+      data: payment,
+    });
+  } catch (error) {
+    console.error("Error fetching payments:", error);
+    res.status(500).json({ message: "Error fetching payments" });
+  }
+};
+
+export const getPaymentByReference = async (req, res) => {
+  try {
+    const { reference } = req.params;
+    const userId = req.user.id;
+
+    const payment = await Payment.findOne({
+      transactionRef: reference,
+      user: userId,
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found" });
     }
-}
 
-export const paystackWebhook = async(req, res) => {
-    try{
-        const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-        const hash = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY).update(JSON.stringify(req.body)).digest('hex');
-        if (hash !== req.headers['x-paystack-signature']) {
-            return res.status(401).json({ message: "Invalid signature" });
-        }
+    res.status(200).json({
+      message: "Payment fetched successfully",
+      data: payment,
+    });
+  } catch (error) {
+    console.error("Error fetching payment:", error);
+    res.status(500).json({ message: "Error fetching payment" });
+  }
+};
 
-        const event = req.body
+export const paystackWebhook = async (req, res) => {
+  try {
+    const signature = req.headers["x-paystack-signature"];
 
-        if(event.event === 'charge.success'){
-            const data = event.data;
-            const reference = data.reference;
+    const hash = crypto
+      .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+      .update(JSON.stringify(req.body))
+      .digest("hex");
 
-            const payment = await Payment.findOne({ transactionRef: reference });
-            
-            if (payment && payment.status !== "successful") {
-                payment.status = "successful";
-                payment.channel = data.channel;
-                payment.paidAt = data.paid_at;
-
-                await payment.save();
-                await Cart.findOneAndDelete({ user: payment.user });
- 
-                await Order.findByIdAndUpdate(payment.order, { orderStatus: "confirmed" });
-
-                 return res.status(200).json({
-                    message: "Payment verified successfully",
-                    data: payment,
-                });
-            }else{
-                payment.status = "failed";
-                await payment.save();
-    
-                return res.status(400).json({ message: "Payment verification failed", data: payment });
-            }
-           
-        }
-    }catch(error){
-        console.error("Error verifying payment:", error?.response?.data || error);
-        res.status(500).json({ message: "Error verifying payment" });
+    if (hash !== signature) {
+      return res.status(401).send("Invalid signature");
     }
-}
+
+    const event = req.body;
+
+    if (event.event === "charge.success") {
+      const { reference } = event.data;
+
+      const payment = await Payment.findOne({ transactionRef: reference });
+
+      if (!payment) return res.sendStatus(404);
+
+      if (payment.status === "successful") return res.sendStatus(200);
+
+      payment.status = "successful";
+      payment.paymentMethod = event.data.channel;
+      payment.paidAt = event.data.paid_at;
+      await payment.save();
+
+      await Order.findByIdAndUpdate(payment.order, {
+        orderStatus: "confirmed",
+        paymentStatus: "paid",
+      });
+
+      await Cart.findOneAndDelete({ user: payment.user });
+    }
+
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error("Webhook Error:", error);
+    return res.sendStatus(500);
+  }
+};
