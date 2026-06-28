@@ -39,19 +39,12 @@ app.use("/api/payment", paymentRoute);
 app.use("/api/analytics", analyticsRoute);
 
 app.use(
-  "/api-docs",
+  "/",
   swaggerUi.serve,
   swaggerUi.setup(swaggerDocument, {
     customSiteTitle: "Bookstore API Documentation",
   }),
 );
-
-app.get("/", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    message: "Server is running",
-  });
-});
 
 const start = () => {
   try {
