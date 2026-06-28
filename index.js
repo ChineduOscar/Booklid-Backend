@@ -38,7 +38,13 @@ app.use("/api/orders", orderRoute);
 app.use("/api/payment", paymentRoute);
 app.use("/api/analytics", analyticsRoute);
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerDocument, {
+    customSiteTitle: "Bookstore API Documentation",
+  }),
+);
 
 app.get("/", (req, res) => {
   res.status(200).json({
