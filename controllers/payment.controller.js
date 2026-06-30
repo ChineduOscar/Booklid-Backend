@@ -94,7 +94,10 @@ export const verifyPayment = async (req, res) => {
     }
 
     if (payment.status === "successful") {
-      return res.status(400).json({ message: "You have already made payment" });
+      return res.status(200).json({
+        message: "Payment already verified",
+        data: payment,
+      });
     }
 
     if (data.status === "success") {
