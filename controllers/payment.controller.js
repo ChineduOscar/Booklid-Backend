@@ -34,7 +34,7 @@ export const initializePayment = async (req, res) => {
       {
         email: req.user.email,
         amount: totalAmount * 100,
-        callback_url: "http://localhost:5173/payment/success",
+        callback_url: "https://booklide.netlify.app/payment/success",
         metadata: {
           userId,
           orderId: order._id,
